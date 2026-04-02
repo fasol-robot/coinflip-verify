@@ -1,0 +1,392 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CoinFlip — Provably Fair Verification</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: 'SF Pro Display', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #0a0a0a;
+            color: #e0e0e0;
+            min-height: 100vh;
+            padding: 24px 16px;
+        }
+
+        .container {
+            max-width: 640px;
+            margin: 0 auto;
+        }
+
+        h1 {
+            font-size: 24px;
+            font-weight: 600;
+            color: #fff;
+            margin-bottom: 8px;
+        }
+
+        .subtitle {
+            color: #888;
+            font-size: 14px;
+            line-height: 1.5;
+            margin-bottom: 32px;
+        }
+
+        .section {
+            background: #141414;
+            border: 1px solid #2a2a2a;
+            border-radius: 12px;
+            padding: 20px;
+            margin-bottom: 16px;
+        }
+
+        .section h2 {
+            font-size: 16px;
+            font-weight: 600;
+            color: #fff;
+            margin-bottom: 16px;
+        }
+
+        label {
+            display: block;
+            font-size: 13px;
+            color: #888;
+            margin-bottom: 6px;
+        }
+
+        input {
+            width: 100%;
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 10px 12px;
+            color: #fff;
+            font-size: 14px;
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            margin-bottom: 12px;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        input:focus { border-color: #f5c842; }
+        input::placeholder { color: #444; }
+
+        button {
+            width: 100%;
+            background: linear-gradient(135deg, #f5c842, #c8860a);
+            color: #000;
+            border: none;
+            border-radius: 8px;
+            padding: 12px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: brightness 0.2s;
+        }
+
+        button:hover { filter: brightness(1.1); }
+        button:active { filter: brightness(0.9); }
+
+        .result {
+            margin-top: 20px;
+            display: none;
+        }
+
+        .result.show { display: block; }
+
+        .result-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            padding: 12px 0;
+            border-bottom: 1px solid #1f1f1f;
+        }
+
+        .result-row:last-child { border-bottom: none; }
+
+        .result-label {
+            font-size: 13px;
+            color: #888;
+            flex-shrink: 0;
+            margin-right: 12px;
+        }
+
+        .result-value {
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            font-size: 13px;
+            color: #fff;
+            word-break: break-all;
+            text-align: right;
+        }
+
+        .result-value.flip-result {
+            font-size: 24px;
+            font-weight: 700;
+            font-family: inherit;
+        }
+
+        .heads { color: #f5c842; }
+        .tails { color: #9b59b6; }
+        .match { color: #51A265; }
+        .no-match { color: #E54D6B; }
+
+        .check-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 14px;
+            border-radius: 8px;
+            margin-top: 12px;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .check-row.pass {
+            background: rgba(81, 162, 101, 0.1);
+            border: 1px solid rgba(81, 162, 101, 0.3);
+            color: #51A265;
+        }
+
+        .check-row.fail {
+            background: rgba(229, 77, 107, 0.1);
+            border: 1px solid rgba(229, 77, 107, 0.3);
+            color: #E54D6B;
+        }
+
+        .check-icon { font-size: 18px; }
+
+        .formula {
+            background: #111;
+            border: 1px solid #222;
+            border-radius: 8px;
+            padding: 16px;
+            margin-top: 12px;
+            font-family: 'SF Mono', 'Fira Code', monospace;
+            font-size: 12px;
+            line-height: 1.8;
+            color: #aaa;
+            overflow-x: auto;
+        }
+
+        .formula .comment { color: #555; }
+        .formula .keyword { color: #f5c842; }
+        .formula .number { color: #9b59b6; }
+
+        a { color: #f5c842; text-decoration: none; }
+        a:hover { text-decoration: underline; }
+
+        .footer {
+            text-align: center;
+            margin-top: 32px;
+            font-size: 12px;
+            color: #555;
+        }
+
+        .footer a { color: #666; }
+
+        .coin-emoji { font-size: 32px; margin-right: 8px; vertical-align: middle; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1><span class="coin-emoji">&#x1FA99;</span> CoinFlip Verify</h1>
+        <p class="subtitle">
+            Every flip is provably fair. Before the round, a commit hash (SHA-256 of the secret seed)
+            is published. After the flip, the seed is revealed. Use this tool to verify the result
+            was predetermined — HEADS or TAILS, 50/50, no manipulation possible.
+        </p>
+
+        <div class="section">
+            <h2>Verify a Flip</h2>
+
+            <label for="seed">Server Seed (hex)</label>
+            <input type="text" id="seed" placeholder="e.g. 125cef3e31bea5390b999e44e493015c5bacf711..." />
+
+            <label for="gameSeq">Round # (game number)</label>
+            <input type="number" id="gameSeq" placeholder="e.g. 28" />
+
+            <label for="commitHash">Commit Hash to verify (optional)</label>
+            <input type="text" id="commitHash" placeholder="e.g. fe35bc935d1e482eea78d3006eab687d3e73b593..." />
+
+            <button onclick="verify()">Verify Flip</button>
+
+            <div class="result" id="result">
+                <div class="result-row">
+                    <span class="result-label">Result</span>
+                    <span class="result-value flip-result" id="resultFlip"></span>
+                </div>
+                <div class="result-row">
+                    <span class="result-label">Hash byte (v)</span>
+                    <span class="result-value" id="resultByte"></span>
+                </div>
+                <div class="result-row">
+                    <span class="result-label">Computed Hash</span>
+                    <span class="result-value" id="resultHash"></span>
+                </div>
+                <div id="hashCheck"></div>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>How It Works</h2>
+            <p style="font-size: 13px; color: #888; line-height: 1.6; margin-bottom: 12px;">
+                Before each round, the server generates a random 32-byte seed and publishes its
+                SHA-256 hash (the commit hash). Players place bets only seeing the hash.
+                After the round, the seed is revealed — anyone can verify it matches the hash
+                and recompute the result.
+            </p>
+            <p style="font-size: 13px; color: #888; line-height: 1.6; margin-bottom: 12px;">
+                The result is <strong style="color:#f5c842">HEADS</strong> if the first byte of
+                the result hash is less than 128, and <strong style="color:#9b59b6">TAILS</strong>
+                otherwise. This gives an exact 50/50 probability (128 out of 256 possible byte values).
+            </p>
+
+            <div class="formula">
+                <span class="comment">// 1. Commit (before round)</span><br>
+                commit_hash = <span class="keyword">SHA256</span>(server_seed)<br><br>
+
+                <span class="comment">// 2. Flip result (deterministic)</span><br>
+                input  = server_seed + <span class="keyword">"flip"</span> + round_number_le64<br>
+                hash   = <span class="keyword">SHA256</span>(input)<br>
+                v      = hash[<span class="number">0</span>] <span class="comment">// first byte (0-255)</span><br>
+                result = v &lt; <span class="number">128</span> ? <span class="keyword">HEADS</span> : <span class="keyword">TAILS</span><br><br>
+
+                <span class="comment">// Probability: 128/256 = exactly 50%</span>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>Source Code</h2>
+            <p style="font-size: 13px; color: #888; line-height: 1.6;">
+                This page runs entirely in your browser — no server calls.
+                Inspect the source to see the exact verification code.<br><br>
+                On-chain program: <a href="https://solscan.io/account/EGk59wGBiJXJQ7a6a9dSRr55X8or1JJH6zuaj2zLsF7o" target="_blank">EGk59...sF7o</a><br>
+                Verification source: <a href="https://github.com/fasol-robot/coinflip-verify" target="_blank">github.com/fasol-robot/coinflip-verify</a>
+            </p>
+        </div>
+
+        <div class="footer">
+            <a href="https://fasol.love" target="_blank">fasol.love</a>
+        </div>
+    </div>
+
+    <script>
+        // ─── SHA-256 using Web Crypto API ────────────────────────────────────────
+        async function sha256(data) {
+            const hash = await crypto.subtle.digest('SHA-256', data);
+            return new Uint8Array(hash);
+        }
+
+        function hexToBytes(hex) {
+            const bytes = new Uint8Array(hex.length / 2);
+            for (let i = 0; i < hex.length; i += 2) {
+                bytes[i / 2] = parseInt(hex.substr(i, 2), 16);
+            }
+            return bytes;
+        }
+
+        function bytesToHex(bytes) {
+            return Array.from(bytes).map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+
+        function uint64LE(n) {
+            const buf = new Uint8Array(8);
+            let val = BigInt(n);
+            for (let i = 0; i < 8; i++) {
+                buf[i] = Number(val & 0xFFn);
+                val >>= 8n;
+            }
+            return buf;
+        }
+
+        // ─── CoinFlip result computation (matches on-chain exactly) ────────────
+        async function computeFlipResult(serverSeedHex, gameSeq) {
+            const seedBytes = hexToBytes(serverSeedHex);
+            const flipStr = new TextEncoder().encode('flip');
+            const seqBytes = uint64LE(gameSeq);
+
+            // input = serverSeed || "flip" || gameSeq_le64
+            const input = new Uint8Array(seedBytes.length + flipStr.length + seqBytes.length);
+            input.set(seedBytes, 0);
+            input.set(flipStr, seedBytes.length);
+            input.set(seqBytes, seedBytes.length + flipStr.length);
+
+            const hash = await sha256(input);
+            const v = hash[0]; // first byte
+
+            return { result: v < 128 ? 'HEADS' : 'TAILS', v };
+        }
+
+        async function computeCommitHash(serverSeedHex) {
+            const seedBytes = hexToBytes(serverSeedHex);
+            const hash = await sha256(seedBytes);
+            return bytesToHex(hash);
+        }
+
+        // ─── Verify button handler ───────────────────────────────────────────────
+        async function verify() {
+            const seedInput = document.getElementById('seed').value.trim();
+            const seqInput = document.getElementById('gameSeq').value.trim();
+            const userHash = document.getElementById('commitHash').value.trim().toLowerCase();
+
+            if (!seedInput || !seqInput) {
+                alert('Please enter both Server Seed and Round #');
+                return;
+            }
+
+            if (!/^[0-9a-fA-F]+$/.test(seedInput)) {
+                alert('Server Seed must be a hex string');
+                return;
+            }
+
+            const gameSeq = parseInt(seqInput, 10);
+            if (isNaN(gameSeq) || gameSeq < 0) {
+                alert('Round # must be a non-negative number');
+                return;
+            }
+
+            try {
+                const [{ result, v }, computedHash] = await Promise.all([
+                    computeFlipResult(seedInput.toLowerCase(), gameSeq),
+                    computeCommitHash(seedInput.toLowerCase()),
+                ]);
+
+                const isHeads = result === 'HEADS';
+                const resultEl = document.getElementById('resultFlip');
+                resultEl.textContent = result;
+                resultEl.className = 'result-value flip-result ' + (isHeads ? 'heads' : 'tails');
+
+                document.getElementById('resultByte').textContent = v + (isHeads ? ' (< 128 = HEADS)' : ' (>= 128 = TAILS)');
+                document.getElementById('resultHash').textContent = computedHash;
+
+                // Hash verification
+                const hashCheckEl = document.getElementById('hashCheck');
+                if (userHash) {
+                    const matches = computedHash === userHash;
+                    hashCheckEl.innerHTML = `
+                        <div class="check-row ${matches ? 'pass' : 'fail'}">
+                            <span class="check-icon">${matches ? '\u2713' : '\u2717'}</span>
+                            ${matches
+                                ? 'Hash matches — seed was not changed after the round started'
+                                : 'Hash does NOT match — the provided commit hash does not match this seed'}
+                        </div>
+                    `;
+                } else {
+                    hashCheckEl.innerHTML = '';
+                }
+
+                document.getElementById('result').classList.add('show');
+            } catch (e) {
+                alert('Error: ' + e.message);
+            }
+        }
+
+        // Enter key triggers verify
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') verify();
+        });
+    </script>
+</body>
+</html>
