@@ -204,8 +204,12 @@
             <label for="seed">Server Seed (hex)</label>
             <input type="text" id="seed" placeholder="e.g. 125cef3e31bea5390b999e44e493015c5bacf711..." />
 
-            <label for="gameSeq">Round # (game number)</label>
+            <label for="gameSeq">Round # (<strong>on-chain</strong> game number)</label>
             <input type="number" id="gameSeq" placeholder="e.g. 28" />
+            <p style="font-size: 11px; color: #888; margin-top: -6px; margin-bottom: 12px; line-height: 1.4;">
+                Use the on-chain game number shown in the game's proof modal — not the sequential UI label "Round N".
+                For coin-flip the two often differ (off-chain rounds skip the on-chain counter).
+            </p>
 
             <label for="commitHash">Commit Hash to verify (optional)</label>
             <input type="text" id="commitHash" placeholder="e.g. fe35bc935d1e482eea78d3006eab687d3e73b593..." />
@@ -222,8 +226,12 @@
                     <span class="result-value" id="resultByte"></span>
                 </div>
                 <div class="result-row">
-                    <span class="result-label">Computed Hash</span>
+                    <span class="result-label">Result Hash <span style="color:#888; font-weight: normal;">(SHA256(seed||"flip"||round_le64))</span></span>
                     <span class="result-value" id="resultHash"></span>
+                </div>
+                <div class="result-row">
+                    <span class="result-label">Commit Hash <span style="color:#888; font-weight: normal;">(SHA256(seed))</span></span>
+                    <span class="result-value" id="commitHashOut"></span>
                 </div>
                 <div id="hashCheck"></div>
             </div>
@@ -244,16 +252,18 @@
             </p>
 
             <div class="formula">
-                <span class="comment">// 1. Commit (before round)</span><br>
+                <span class="comment">// 1. Commit (before round) — used only to prove the seed wasn't changed</span><br>
                 commit_hash = <span class="keyword">SHA256</span>(server_seed)<br><br>
 
-                <span class="comment">// 2. Flip result (deterministic)</span><br>
-                input  = server_seed + <span class="keyword">"flip"</span> + round_number_le64<br>
-                hash   = <span class="keyword">SHA256</span>(input)<br>
-                v      = hash[<span class="number">0</span>] <span class="comment">// first byte (0-255)</span><br>
-                result = v &lt; <span class="number">128</span> ? <span class="keyword">HEADS</span> : <span class="keyword">TAILS</span><br><br>
+                <span class="comment">// 2. Flip result (deterministic) — separate hash, uses round number</span><br>
+                <span class="comment">//    round_number is the ON-CHAIN game_seq, NOT the UI "Round N"</span><br>
+                input        = server_seed + <span class="keyword">"flip"</span> + round_number_le64<br>
+                result_hash  = <span class="keyword">SHA256</span>(input)<br>
+                v            = result_hash[<span class="number">0</span>] <span class="comment">// first byte (0-255)</span><br>
+                result       = v &lt; <span class="number">128</span> ? <span class="keyword">HEADS</span> : <span class="keyword">TAILS</span><br><br>
 
-                <span class="comment">// Probability: 128/256 = exactly 50%</span>
+                <span class="comment">// Probability: 128/256 = exactly 50%</span><br>
+                <span class="comment">// Note: commit_hash ≠ result_hash. Don't confuse them.</span>
             </div>
         </div>
 
@@ -316,7 +326,7 @@
             const hash = await sha256(input);
             const v = hash[0]; // first byte
 
-            return { result: v < 128 ? 'HEADS' : 'TAILS', v };
+            return { result: v < 128 ? 'HEADS' : 'TAILS', v, hash: bytesToHex(hash) };
         }
 
         async function computeCommitHash(serverSeedHex) {
@@ -348,7 +358,7 @@
             }
 
             try {
-                const [{ result, v }, computedHash] = await Promise.all([
+                const [{ result, v, hash: resultHashHex }, commitHashHex] = await Promise.all([
                     computeFlipResult(seedInput.toLowerCase(), gameSeq),
                     computeCommitHash(seedInput.toLowerCase()),
                 ]);
@@ -359,12 +369,13 @@
                 resultEl.className = 'result-value flip-result ' + (isHeads ? 'heads' : 'tails');
 
                 document.getElementById('resultByte').textContent = v + (isHeads ? ' (< 128 = HEADS)' : ' (>= 128 = TAILS)');
-                document.getElementById('resultHash').textContent = computedHash;
+                document.getElementById('resultHash').textContent = resultHashHex;
+                document.getElementById('commitHashOut').textContent = commitHashHex;
 
-                // Hash verification
+                // Commit-hash verification: user-supplied vs SHA256(seed).
                 const hashCheckEl = document.getElementById('hashCheck');
                 if (userHash) {
-                    const matches = computedHash === userHash;
+                    const matches = commitHashHex === userHash;
                     hashCheckEl.innerHTML = `
                         <div class="check-row ${matches ? 'pass' : 'fail'}">
                             <span class="check-icon">${matches ? '\u2713' : '\u2717'}</span>
