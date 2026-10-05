@@ -204,11 +204,13 @@
             <label for="seed">Server Seed (hex)</label>
             <input type="text" id="seed" placeholder="e.g. 125cef3e31bea5390b999e44e493015c5bacf711..." />
 
-            <label for="gameSeq">Round # (<strong>on-chain</strong> game number)</label>
+            <label for="gameSeq">Round # (<strong>on-chain</strong> game number) — needed for the result, not for the commit hash</label>
             <input type="number" id="gameSeq" placeholder="e.g. 28" />
             <p style="font-size: 11px; color: #888; margin-top: -6px; margin-bottom: 12px; line-height: 1.4;">
                 Use the on-chain game number shown in the game's proof modal — not the sequential UI label "Round N".
                 For coin-flip the two often differ (off-chain rounds skip the on-chain counter).
+                The commit hash is SHA-256 of the seed alone and does not change with the round number;
+                leave the number empty to check only the commit.
             </p>
 
             <label for="commitHash">Commit Hash to verify (optional)</label>
@@ -341,8 +343,8 @@
             const seqInput = document.getElementById('gameSeq').value.trim();
             const userHash = document.getElementById('commitHash').value.trim().toLowerCase();
 
-            if (!seedInput || !seqInput) {
-                alert('Please enter both Server Seed and Round #');
+            if (!seedInput) {
+                alert('Please enter the Server Seed');
                 return;
             }
 
@@ -351,25 +353,38 @@
                 return;
             }
 
-            const gameSeq = parseInt(seqInput, 10);
-            if (isNaN(gameSeq) || gameSeq < 0) {
-                alert('Round # must be a non-negative number');
-                return;
+            // Round # is optional: without it only the commit hash is checked —
+            // the commit is SHA-256 of the seed and does not depend on the round.
+            // The flip result does, so it needs the number.
+            let gameSeq = null;
+            if (seqInput) {
+                gameSeq = parseInt(seqInput, 10);
+                if (isNaN(gameSeq) || gameSeq < 0) {
+                    alert('Round # must be a non-negative number');
+                    return;
+                }
             }
 
             try {
-                const [{ result, v, hash: resultHashHex }, commitHashHex] = await Promise.all([
-                    computeFlipResult(seedInput.toLowerCase(), gameSeq),
+                const [flip, commitHashHex] = await Promise.all([
+                    gameSeq === null ? Promise.resolve(null) : computeFlipResult(seedInput.toLowerCase(), gameSeq),
                     computeCommitHash(seedInput.toLowerCase()),
                 ]);
 
-                const isHeads = result === 'HEADS';
                 const resultEl = document.getElementById('resultFlip');
-                resultEl.textContent = result;
-                resultEl.className = 'result-value flip-result ' + (isHeads ? 'heads' : 'tails');
-
-                document.getElementById('resultByte').textContent = v + (isHeads ? ' (< 128 = HEADS)' : ' (>= 128 = TAILS)');
-                document.getElementById('resultHash').textContent = resultHashHex;
+                if (flip === null) {
+                    resultEl.textContent = 'enter Round # to compute';
+                    resultEl.className = 'result-value';
+                    document.getElementById('resultByte').textContent = '—';
+                    document.getElementById('resultHash').textContent = '—';
+                } else {
+                    const { result, v, hash: resultHashHex } = flip;
+                    const isHeads = result === 'HEADS';
+                    resultEl.textContent = result;
+                    resultEl.className = 'result-value flip-result ' + (isHeads ? 'heads' : 'tails');
+                    document.getElementById('resultByte').textContent = v + (isHeads ? ' (< 128 = HEADS)' : ' (>= 128 = TAILS)');
+                    document.getElementById('resultHash').textContent = resultHashHex;
+                }
                 document.getElementById('commitHashOut').textContent = commitHashHex;
 
                 // Commit-hash verification: user-supplied vs SHA256(seed).
